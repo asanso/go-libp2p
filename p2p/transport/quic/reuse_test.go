@@ -2,6 +2,7 @@ package libp2pquic
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"runtime/pprof"
 	"strings"
@@ -43,20 +44,24 @@ func platformHasRoutingTables() bool {
 func isGarbageCollectorRunning() bool {
 	var b bytes.Buffer
 	pprof.Lookup("goroutine").WriteTo(&b, 1)
-	return strings.Contains(b.String(), "quic.(*reuse).gc")
+	running := strings.Contains(b.String(), "quic.(*reuse).gc")
+	fmt.Println(b.String())
+	return running
 }
 
 func cleanup(t *testing.T, reuse *reuse) {
 	t.Cleanup(func() {
 		closeAllConns(reuse)
 		reuse.Close()
+		fmt.Println("testing that gc is NOT running")
 		require.False(t, isGarbageCollectorRunning(), "reuse gc still running")
 	})
 }
 
 func TestReuseListenOnAllIPv4(t *testing.T) {
 	reuse := newReuse()
-	require.Eventually(t, isGarbageCollectorRunning, 100*time.Millisecond, time.Millisecond, "expected garbage collector to be running")
+	fmt.Println("testing that gc is running")
+	require.Eventuallyf(t, isGarbageCollectorRunning, 100*time.Millisecond, 10*time.Millisecond, "expected garbage collector to be running")
 	cleanup(t, reuse)
 
 	addr, err := net.ResolveUDPAddr("udp4", "0.0.0.0:0")
@@ -68,7 +73,8 @@ func TestReuseListenOnAllIPv4(t *testing.T) {
 
 func TestReuseListenOnAllIPv6(t *testing.T) {
 	reuse := newReuse()
-	require.Eventually(t, isGarbageCollectorRunning, 100*time.Millisecond, time.Millisecond, "expected garbage collector to be running")
+	fmt.Println("testing that gc is running")
+	require.Eventually(t, isGarbageCollectorRunning, 100*time.Millisecond, 10*time.Millisecond, "expected garbage collector to be running")
 	cleanup(t, reuse)
 
 	addr, err := net.ResolveUDPAddr("udp6", "[::]:1234")
